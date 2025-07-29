@@ -19,16 +19,15 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const processData = (rawData: HistoricalData[], baseAssetTicker: string, period: number): PerformanceResult => {
-      const currentYear = new Date().getFullYear();
-      const startYear = currentYear - period;
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setFullYear(endDate.getFullYear() - period);
 
       let baseAssetData = rawData.find(d => d.assetTicker === baseAssetTicker);
       if (baseAssetTicker !== 'USD' && !baseAssetData) {
-          // Fallback if base asset data is missing, though unlikely with mock data
           baseAssetData = rawData.find(d => d.assetTicker === 'USD');
           if (!baseAssetData) throw new Error(`Base asset ${baseAssetTicker} data not found, and USD fallback failed.`);
       }
-
 
       const processedData: ProcessedData[] = [];
       const performanceSummary: { name: string; growth: number; color: string; }[] = [];
@@ -36,7 +35,11 @@ const App: React.FC = () => {
       const colors = ['#14F195', '#00C2FF', '#FF6B6B', '#FFD166', '#9B59B6', '#3498DB', '#F1C40F', '#E74C3C'];
       
       rawData.forEach((asset, index) => {
-          const relevantData = asset.historicalData.filter(d => d.year >= startYear && d.year < currentYear).sort((a,b) => a.year - b.year);
+          const relevantData = asset.historicalData
+            .map(d => ({ ...d, dateObj: new Date(d.date) }))
+            .filter(d => d.dateObj >= startDate && d.dateObj <= endDate)
+            .sort((a,b) => a.dateObj.getTime() - b.dateObj.getTime());
+          
           if(relevantData.length < 2) return; // Need at least two data points to calculate growth
 
           const startPriceUSD = relevantData[0].priceUSD;
@@ -48,38 +51,37 @@ const App: React.FC = () => {
               color: colors[index % colors.length]
           });
           
-          relevantData.forEach(yearlyData => {
-              let existingYearEntry = processedData.find(p => p.year === yearlyData.year);
-              if (!existingYearEntry) {
-                  existingYearEntry = { year: yearlyData.year };
-                  processedData.push(existingYearEntry);
+          relevantData.forEach(monthlyData => {
+              let existingDateEntry = processedData.find(p => p.date === monthlyData.date);
+              if (!existingDateEntry) {
+                  existingDateEntry = { date: monthlyData.date };
+                  processedData.push(existingDateEntry);
               }
 
-              let value = yearlyData.priceUSD;
+              let value = monthlyData.priceUSD;
               if(baseAssetTicker !== 'USD' && baseAssetData) {
-                  const baseAssetPriceForYear = baseAssetData.historicalData.find(d => d.year === yearlyData.year)?.priceUSD;
-                  if(baseAssetPriceForYear && baseAssetPriceForYear > 0){
-                      value = yearlyData.priceUSD / baseAssetPriceForYear;
+                  const baseAssetPriceForDate = baseAssetData.historicalData.find(d => d.date === monthlyData.date)?.priceUSD;
+                  if(baseAssetPriceForDate && baseAssetPriceForDate > 0){
+                      value = monthlyData.priceUSD / baseAssetPriceForDate;
                   } else {
                      value = 0; // Avoid division by zero
                   }
               }
 
               // Normalize to 100
-              const firstYearData = relevantData[0];
-              const baseAssetFirstYearPrice = baseAssetTicker === 'USD' ? 1 : baseAssetData?.historicalData.find(d => d.year === firstYearData.year)?.priceUSD;
+              const firstDataPoint = relevantData[0];
+              const baseAssetFirstDataPointPrice = baseAssetTicker === 'USD' ? 1 : baseAssetData?.historicalData.find(d => d.date === firstDataPoint.date)?.priceUSD;
              
-              if(firstYearData.priceUSD > 0 && baseAssetFirstYearPrice && baseAssetFirstYearPrice > 0) {
-                const normalizedStartValue = firstYearData.priceUSD / baseAssetFirstYearPrice;
+              if(firstDataPoint.priceUSD > 0 && baseAssetFirstDataPointPrice && baseAssetFirstDataPointPrice > 0) {
+                const normalizedStartValue = firstDataPoint.priceUSD / baseAssetFirstDataPointPrice;
                  if(normalizedStartValue > 0) {
-                   existingYearEntry[asset.assetTicker] = (value / normalizedStartValue) * 100;
+                   existingDateEntry[asset.assetTicker] = (value / normalizedStartValue) * 100;
                 }
               }
           });
       });
 
-      // Sort processedData by year
-      processedData.sort((a,b) => a.year - b.year);
+      processedData.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       performanceSummary.sort((a, b) => b.growth - a.growth);
 
       return {
@@ -98,7 +100,9 @@ const App: React.FC = () => {
     setError(null);
     setResults(null);
     try {
-      const data = await getInvestmentData(appState.selectedAssets);
+      // Ensure base asset is always included in the fetch request
+      const assetsToFetch = [...new Set([...appState.selectedAssets, appState.baseAsset])];
+      const data = await getInvestmentData(assetsToFetch);
       const processed = processData(data, appState.baseAsset, appState.timePeriod);
       setResults(processed);
     } catch (e) {

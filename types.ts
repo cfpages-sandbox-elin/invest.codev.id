@@ -16,7 +16,7 @@ export interface AppState {
 }
 
 export interface HistoricalDataPoint {
-    year: number;
+    date: string; // Format: 'YYYY-MM'
     priceUSD: number;
 }
 
@@ -28,8 +28,8 @@ export interface HistoricalData {
 }
 
 export interface ProcessedData {
-  year: number;
-  [key: string]: number; // assetTicker: normalized value
+  date: string; // Format: 'YYYY-MM'
+  [key: string]: number | string; // assetTicker: normalized value
 }
 
 export interface PerformanceSummaryItem {

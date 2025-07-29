@@ -12,9 +12,11 @@ interface ResultsDisplayProps {
 
 const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
+    const date = new Date(label);
+    const formattedDate = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     return (
       <div className="bg-base-300/80 backdrop-blur-sm p-3 border border-base-100 rounded-lg shadow-xl">
-        <p className="label font-bold text-gray-200">{`Year: ${label}`}</p>
+        <p className="label font-bold text-gray-200">{formattedDate}</p>
         {payload.map((pld: any) => (
           <div key={pld.dataKey} style={{ color: pld.color }}>
             {`${ALL_ASSETS.find(a => a.ticker === pld.dataKey)?.name || pld.dataKey}: ${pld.value.toFixed(2)}`}
@@ -28,8 +30,14 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
 
 export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, baseAsset }) => {
   const { chartData, summary, winner } = results;
-  const assetTickers = summary.map(s => ALL_ASSETS.find(a => a.name === s.name)?.ticker || 'N/A');
 
+  const xAxisTickFormatter = (tick: string) => {
+    if (tick.endsWith('-01')) { // Only show label for January
+      return tick.substring(0, 4);
+    }
+    return '';
+  };
+  
   return (
     <div className="mt-10 space-y-10">
       <div>
@@ -43,19 +51,26 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, baseAss
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
-              <XAxis dataKey="year" stroke="#A6ADBB" tick={{ fill: '#A6ADBB' }} />
+              <XAxis 
+                  dataKey="date" 
+                  stroke="#A6ADBB" 
+                  tick={{ fill: '#A6ADBB' }} 
+                  tickFormatter={xAxisTickFormatter}
+                  interval="preserveStartEnd"
+                  dy={5}
+              />
               <YAxis stroke="#A6ADBB" tick={{ fill: '#A6ADBB' }} tickFormatter={(value) => `${value}`} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend formatter={(value, entry) => <span className="text-gray-300">{ALL_ASSETS.find(a => a.ticker === value)?.name || value}</span>} />
+              <Legend formatter={(value) => <span className="text-gray-300">{ALL_ASSETS.find(a => a.ticker === value)?.name || value}</span>} />
               {summary.map((item) => (
                 <Line 
                   key={item.name} 
                   type="monotone" 
                   dataKey={ALL_ASSETS.find(a => a.name === item.name)?.ticker} 
                   stroke={item.color}
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   dot={false}
-                  activeDot={{ r: 6 }}
+                  activeDot={{ r: 6, strokeWidth: 2 }}
                 />
               ))}
             </LineChart>
@@ -79,12 +94,10 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, baseAss
                     {summary.map((item, index) => (
                     <tr key={item.name} className={`border-b border-base-100/50 ${index === 0 ? 'bg-brand-primary/10' : ''}`}>
                         <td className="p-3">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold ${index === 0 ? 'bg-brand-primary text-base-300' : 'bg-base-100 text-gray-300'}`}>
-                                {index + 1}
-                            </span>
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold ${index === 0 ? 'bg-brand-primary text-base-300' : 'bg-base-100 text-gray-300'}`}>{index + 1}</span>
                         </td>
-                        <td className="p-3 font-medium" style={{color: item.color}}>{item.name}</td>
-                        <td className={`p-3 text-right font-mono font-semibold ${item.growth >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <td className="p-3 font-medium text-gray-200">{item.name}</td>
+                        <td className={`p-3 font-semibold text-right ${item.growth >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {item.growth >= 0 ? '+' : ''}{item.growth.toFixed(2)}%
                         </td>
                     </tr>
@@ -93,16 +106,19 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, baseAss
                 </table>
            </div>
         </div>
-
+        
         {winner && (
-            <div className="bg-gradient-to-br from-brand-primary to-brand-secondary p-6 rounded-xl shadow-lg text-base-300 flex flex-col items-center justify-center text-center">
-                <TrophyIcon className="w-16 h-16 mb-4" />
-                <h3 className="text-xl font-bold">Clear Winner</h3>
-                <p className="text-2xl font-bold mt-2" style={{color: "white"}}>{winner.name}</p>
-                <p className="mt-4 text-4xl font-mono font-bold bg-black/20 px-4 py-2 rounded-lg">
-                    +{winner.growth.toFixed(2)}%
-                </p>
+          <div className="bg-gradient-to-br from-brand-primary to-brand-secondary p-6 rounded-xl shadow-lg flex flex-col items-center justify-center text-center">
+            <TrophyIcon className="w-16 h-16 text-white mb-4" />
+            <h3 className="text-xl font-bold text-white">Clear Winner</h3>
+            <p className="text-2xl font-black text-white mt-2">{winner.name}</p>
+            <div className="mt-4 bg-white/20 rounded-full px-4 py-2">
+              <span className="text-3xl font-bold text-white">
+                +{winner.growth.toFixed(2)}%
+              </span>
+              <p className="text-sm text-white/80">Total Growth</p>
             </div>
+          </div>
         )}
       </div>
     </div>
